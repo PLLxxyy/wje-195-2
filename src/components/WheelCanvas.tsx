@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { WheelOption } from '../types';
+import { weightedRandomIndex } from '../storage';
 
 interface Props {
   options: WheelOption[];
@@ -12,8 +13,25 @@ export default function WheelCanvas({ options, spinning, onResult, highlightOpti
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const angleRef = useRef(0);
-  const velocityRef = useRef(0);
   const [size, setSize] = useState(400);
+
+  const totalWeight = options.reduce((sum, o) => sum + Math.max(0, o.weight), 0);
+
+  const getSliceAngles = useCallback(() => {
+    const angles: { start: number; end: number; center: number }[] = [];
+    if (totalWeight <= 0 || options.length === 0) return angles;
+    let accumulated = 0;
+    for (const opt of options) {
+      const w = Math.max(0, opt.weight);
+      const sliceAngle = (w / totalWeight) * Math.PI * 2;
+      const start = accumulated - Math.PI / 2;
+      const end = start + sliceAngle;
+      const center = start + sliceAngle / 2;
+      angles.push({ start, end, center });
+      accumulated += sliceAngle;
+    }
+    return angles;
+  }, [options, totalWeight]);
 
   // Responsive size
   useEffect(() => {
@@ -43,6 +61,7 @@ export default function WheelCanvas({ options, spinning, onResult, highlightOpti
     const cy = size / 2;
     const radius = size / 2 - 10;
     const count = options.length;
+    const sliceAngles = getSliceAngles();
 
     ctx.clearRect(0, 0, size, size);
 
@@ -57,7 +76,7 @@ export default function WheelCanvas({ options, spinning, onResult, highlightOpti
     ctx.stroke();
     ctx.restore();
 
-    if (count === 0) {
+    if (count === 0 || totalWeight <= 0) {
       ctx.fillStyle = '#2a3a5c';
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -70,21 +89,19 @@ export default function WheelCanvas({ options, spinning, onResult, highlightOpti
       return;
     }
 
-    const sliceAngle = (Math.PI * 2) / count;
-
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(rotation);
 
     for (let i = 0; i < count; i++) {
-      const startAngle = i * sliceAngle - Math.PI / 2;
-      const endAngle = startAngle + sliceAngle;
       const opt = options[i];
+      const angles = sliceAngles[i];
+      if (!angles) continue;
 
       // Draw slice
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.arc(0, 0, radius, startAngle, endAngle);
+      ctx.arc(0, 0, radius, angles.start, angles.end);
       ctx.closePath();
 
       // Gradient fill
@@ -101,7 +118,7 @@ export default function WheelCanvas({ options, spinning, onResult, highlightOpti
 
       // Draw text
       ctx.save();
-      const textAngle = startAngle + sliceAngle / 2;
+      const textAngle = angles.center;
       ctx.rotate(textAngle);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -112,8 +129,9 @@ export default function WheelCanvas({ options, spinning, onResult, highlightOpti
       const textRadius = radius * 0.6;
       const maxTextWidth = radius * 0.45;
 
-      // Adjust font size based on text length
-      const baseFontSize = count <= 6 ? 15 : count <= 9 ? 13 : 11;
+      // Adjust font size based on text length and slice size
+      const sliceAngle = angles.end - angles.start;
+      const baseFontSize = sliceAngle > 0.8 ? 15 : sliceAngle > 0.5 ? 13 : 11;
       ctx.font = `bold ${baseFontSize}px sans-serif`;
 
       ctx.fillText(opt.text, textRadius, 0, maxTextWidth);
@@ -148,19 +166,23 @@ export default function WheelCanvas({ options, spinning, onResult, highlightOpti
       const opt = options.find(o => o.id === highlightOptionId);
       if (opt) {
         const idx = options.indexOf(opt);
-        const highlightAngle = idx * sliceAngle + rotation - Math.PI / 2;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.beginPath();
-        ctx.arc(0, 0, radius + 2, highlightAngle, highlightAngle + sliceAngle);
-        ctx.lineTo(0, 0);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(245, 166, 35, 0.15)';
-        ctx.fill();
-        ctx.restore();
+        const angles = sliceAngles[idx];
+        if (angles) {
+          const highlightStart = angles.start + rotation;
+          const highlightEnd = angles.end + rotation;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.beginPath();
+          ctx.arc(0, 0, radius + 2, highlightStart, highlightEnd);
+          ctx.lineTo(0, 0);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(245, 166, 35, 0.15)';
+          ctx.fill();
+          ctx.restore();
+        }
       }
     }
-  }, [options, size, highlightOptionId, spinning]);
+  }, [options, size, highlightOptionId, spinning, getSliceAngles, totalWeight]);
 
   // Animate spinning
   useEffect(() => {
@@ -169,33 +191,52 @@ export default function WheelCanvas({ options, spinning, onResult, highlightOpti
       return;
     }
 
-    // Start spinning
-    const initialVelocity = 0.3 + Math.random() * 0.15;
-    velocityRef.current = initialVelocity;
-    const friction = 0.992;
-    const minVelocity = 0.001;
+    // First determine result by weight
+    const resultIndex = weightedRandomIndex(options);
+    const sliceAngles = getSliceAngles();
+    const targetCenterAngle = sliceAngles[resultIndex]?.center || 0;
 
-    const animate = () => {
-      velocityRef.current *= friction;
-      angleRef.current += velocityRef.current;
+    // We want the pointer (at top, -PI/2) to point at the center of the target slice
+    // After rotation R, slice center angle (relative to -PI/2) becomes: center + R
+    // We want pointer to point at it, so: center + R ≡ -PI/2 (mod 2PI)
+    // => R ≡ -PI/2 - center (mod 2PI)
+    // Actually, let's think again:
+    // - Pointer is at top direction (12 o'clock)
+    // - We rotate the wheel by `rotation` radians
+    // - A slice at original angle `center` will be at angle `center + rotation` after rotation
+    // - We want the slice center to be at the top (-PI/2 in canvas coords)
+    // - So: center + rotation = -PI/2 + 2PI * k
+    // - rotation = -PI/2 - center + 2PI * k
+    const targetRotation = -Math.PI / 2 - targetCenterAngle;
 
-      // Normalize angle
-      angleRef.current = angleRef.current % (Math.PI * 2);
+    // Add extra spins
+    const extraSpins = 5 + Math.floor(Math.random() * 3);
+    const finalAngle = targetRotation + Math.PI * 2 * extraSpins;
 
-      drawWheel(angleRef.current);
+    // Normalize start angle
+    const startAngle = angleRef.current % (Math.PI * 2);
+    const totalRotation = finalAngle - startAngle + Math.PI * 2 * 2;
 
-      if (velocityRef.current > minVelocity) {
+    // Animation with easing
+    const duration = 4000 + Math.random() * 1000;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      const currentAngle = startAngle + totalRotation * eased;
+      angleRef.current = currentAngle;
+      drawWheel(currentAngle);
+
+      if (progress < 1) {
         animRef.current = requestAnimationFrame(animate);
       } else {
-        // Determine result
-        const count = options.length;
-        if (count === 0) return;
-
-        const sliceAngle = (Math.PI * 2) / count;
-        // Pointer is at top (12 o'clock), which is -PI/2 in canvas coords
-        // After rotation, the segment at top is determined by: (-angle) mod 2PI / sliceAngle
-        let normalizedAngle = (-angleRef.current % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-        const resultIndex = Math.floor(normalizedAngle / sliceAngle) % count;
+        angleRef.current = finalAngle;
+        drawWheel(finalAngle);
         onResult(options[resultIndex].text, options[resultIndex].color);
       }
     };

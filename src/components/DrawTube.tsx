@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { WheelOption } from '../types';
+import { weightedRandomIndex } from '../storage';
 
 interface Props {
   options: WheelOption[];
@@ -33,8 +34,8 @@ export default function DrawTube({ options, spinning, onResult }: Props) {
     const shakeTimer = setTimeout(() => {
       setShaking(false);
 
-      // Pick random winner
-      const winIdx = Math.floor(Math.random() * options.length);
+      // Pick winner by weight
+      const winIdx = weightedRandomIndex(options);
       setWinnerIdx(winIdx);
 
       timerRef.current = window.setTimeout(() => {

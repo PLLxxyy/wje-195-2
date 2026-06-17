@@ -54,10 +54,10 @@ export function getDefaultColor(index: number): string {
 
 export function createDefaultScheme(): WheelScheme {
   const options: WheelScheme['options'] = [
-    { id: generateId(), text: '选项一', color: DEFAULT_COLORS[0] },
-    { id: generateId(), text: '选项二', color: DEFAULT_COLORS[1] },
-    { id: generateId(), text: '选项三', color: DEFAULT_COLORS[2] },
-    { id: generateId(), text: '选项四', color: DEFAULT_COLORS[3] },
+    { id: generateId(), text: '选项一', color: DEFAULT_COLORS[0], weight: 1 },
+    { id: generateId(), text: '选项二', color: DEFAULT_COLORS[1], weight: 1 },
+    { id: generateId(), text: '选项三', color: DEFAULT_COLORS[2], weight: 1 },
+    { id: generateId(), text: '选项四', color: DEFAULT_COLORS[3], weight: 1 },
   ];
   return {
     id: generateId(),
@@ -65,4 +65,26 @@ export function createDefaultScheme(): WheelScheme {
     options,
     mode: 'wheel',
   };
+}
+
+export function weightedRandomIndex(options: { weight: number }[]): number {
+  const totalWeight = options.reduce((sum, o) => sum + Math.max(0, o.weight), 0);
+  if (totalWeight <= 0 || options.length === 0) return 0;
+  let random = Math.random() * totalWeight;
+  for (let i = 0; i < options.length; i++) {
+    const w = Math.max(0, options[i].weight);
+    if (random < w) return i;
+    random -= w;
+  }
+  return options.length - 1;
+}
+
+export function migrateSchemesWithWeight(schemes: WheelScheme[]): WheelScheme[] {
+  return schemes.map(scheme => ({
+    ...scheme,
+    options: scheme.options.map(opt => ({
+      weight: 1,
+      ...opt,
+    })),
+  }));
 }

@@ -15,6 +15,7 @@ import {
   generateId,
   getDefaultColor,
   createDefaultScheme,
+  migrateSchemesWithWeight,
 } from './storage';
 import WheelCanvas from './components/WheelCanvas';
 import DrawTube from './components/DrawTube';
@@ -42,6 +43,12 @@ export default function App() {
       const def = createDefaultScheme();
       loadedSchemes = [def];
       saveSchemes(loadedSchemes);
+    } else {
+      const migrated = migrateSchemesWithWeight(loadedSchemes);
+      if (JSON.stringify(migrated) !== JSON.stringify(loadedSchemes)) {
+        loadedSchemes = migrated;
+        saveSchemes(loadedSchemes);
+      }
     }
     setSchemes(loadedSchemes);
     const savedActive = loadActiveSchemeId();
@@ -95,6 +102,7 @@ export default function App() {
       id: generateId(),
       text: `选项${idx + 1}`,
       color: getDefaultColor(idx),
+      weight: 1,
     };
     updateScheme(s => ({ ...s, options: [...s.options, newOpt] }));
   }, [activeScheme, updateScheme]);
@@ -104,7 +112,7 @@ export default function App() {
     updateScheme(s => ({ ...s, options: s.options.filter(o => o.id !== optId) }));
   }, [activeScheme, updateScheme]);
 
-  const updateOption = useCallback((optId: string, field: 'text' | 'color', value: string) => {
+  const updateOption = useCallback((optId: string, field: 'text' | 'color' | 'weight', value: string | number) => {
     updateScheme(s => ({
       ...s,
       options: s.options.map(o => o.id === optId ? { ...o, [field]: value } : o),

@@ -2,6 +2,7 @@ export interface WheelOption {
   id: string;
   text: string;
   color: string;
+  weight: number;
 }
 
 export interface WheelScheme {

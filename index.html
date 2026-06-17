@@ -327,6 +327,59 @@
         cursor: not-allowed;
       }
 
+      .weight-input-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+
+      .weight-label {
+        font-size: 11px;
+        color: #6a7a8c;
+        white-space: nowrap;
+      }
+
+      .weight-input {
+        width: 46px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        border: 1px solid #2a3a5c;
+        background: #1a2540;
+        color: #e0e0e0;
+        font-size: 13px;
+        text-align: center;
+      }
+
+      .weight-input:focus {
+        outline: none;
+        border-color: #e94560;
+      }
+
+      .weight-input::-webkit-outer-spin-button,
+      .weight-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      .weight-input[type=number] {
+        -moz-appearance: textfield;
+      }
+
+      .weight-total-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        margin-top: 8px;
+        background: rgba(233, 69, 96, 0.08);
+        border: 1px solid rgba(233, 69, 96, 0.2);
+        border-radius: 8px;
+        font-size: 13px;
+        color: #f0a0a8;
+        gap: 12px;
+      }
+
       /* Wheel canvas area */
       .wheel-area {
         display: flex;

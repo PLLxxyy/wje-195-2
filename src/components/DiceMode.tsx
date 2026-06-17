@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { WheelOption } from '../types';
+import { weightedRandomIndex } from '../storage';
 
 interface Props {
   options: WheelOption[];
@@ -57,7 +58,7 @@ export default function DiceMode({ options, spinning, onResult, highlightOptionI
       if (tick >= totalTicks) {
         if (intervalRef.current) clearInterval(intervalRef.current);
 
-        const winIdx = Math.floor(Math.random() * count);
+        const winIdx = weightedRandomIndex(options);
         const finalDiceVal = Math.min(winIdx + 1, 6);
         setDiceValue(finalDiceVal);
 
